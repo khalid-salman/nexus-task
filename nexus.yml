@@ -1,0 +1,63 @@
+---
+- hosts: nexus
+  become: yes
+  tasks:
+    - name: Update and install Java
+      apt:
+        update_cache: yes
+        name: openjdk-8-jdk
+        state: present
+
+    - name: Create Nexus user
+      user:
+        name: nexus
+        system: yes
+        shell: /bin/bash
+
+    - name: Download Nexus
+      get_url:
+        url: "https://download.sonatype.com/nexus/3/latest-unix.tar.gz"
+        dest: "/opt/nexus.tar.gz"
+
+    - name: Extract Nexus
+      unarchive:
+        src: "/opt/nexus.tar.gz"
+        dest: "/opt"
+        remote_src: yes
+
+    - name: Set Nexus permissions
+      file:
+        path: /opt/nexus-*
+        owner: nexus
+        group: nexus
+        state: directory
+        recurse: yes
+
+    - name: Configure Nexus as a service
+      copy:
+        content: |
+          [Unit]
+          Description=Nexus Service
+          After=network.target
+
+          [Service]
+          Type=forking
+          User=nexus
+          Group=nexus
+          ExecStart=/opt/nexus-*/bin/nexus start
+          ExecStop=/opt/nexus-*/bin/nexus stop
+          User=nexus
+          LimitNOFILE=65536
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/nexus.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable Nexus service
+      systemd:
+        name: nexus
+        state: started
+        enabled: yes
